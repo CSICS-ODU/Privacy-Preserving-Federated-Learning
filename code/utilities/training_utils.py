@@ -87,7 +87,8 @@ def save_model(net, optim = None, filename ='filename', print_info=False):
 
 def load_model(net, optim=None, filename ='filename', print_info=False):
     try:
-        sanatized_filename = "".join(x for x in filename if x.isalnum())
+        #sanatized_filename = "".join(x for x in filename if x.isalnum())
+        sanatized_filename = "".join(x for x in filename if x.isalnum() or x in "_=")
         path = './saved_models/'+sanatized_filename+'.pt'
         checkpoint = torch.load(path)
         try:
