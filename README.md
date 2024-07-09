@@ -33,4 +33,4 @@ Note that run **[modify.py](https://github.com/soumyaxyz/Privacy-Preserving-Fede
 		sbatch run_fedreated_simulation.sh -r 2 -n 2 -d CIFAR100 -m efficeintnet
 
 		#To run an incremental job (-s number of splits)  
-		sbatch run_fedreated_simulation.sh -r 2 -n 2 -s 4 -d incrementalCIFAR100=ABCD -m efficientnet
+		sbatch run_fedreated_simulation.sh -r 7 -n 2 -t 2 -s 4 -d incrementalCIFAR100=ABCD -m efficientnet
