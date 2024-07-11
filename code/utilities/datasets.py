@@ -14,6 +14,7 @@ from typing import List
 import pandas as pd
 import pprint
 import matplotlib.pyplot as plt
+import pickle
 
 from utilities.lib import blockPrinting
 from utilities.cifar100_fine_coarse_labels import remapping
@@ -39,16 +40,24 @@ class IncrementalDatasetWraper():
         if addetive_train:
             self.splits = implement_addetive_dataset(self.splits, additive_train =True)
 
-    def _load_datasets(self, dataset_name):
+    def _load_datasets(self, dataset_name, data_path="~/dataset"):
         try: 
             dataset_name, remapping = dataset_name.split('=')
         except: 
             remapping = 'ABCD'
-        remapping = get_remapping(remapping)
-        if dataset_name == 'incrementalCIFAR100':
-            data_splits = load_incremental_CIFAR100(remapping=remapping, uniform_test = True)
+        
+        if dataset_name == 'incrementalSVHN':
+            remapping = get_remapping(remapping, n=10)
+            data_splits = load_incremental_SVHN(data_path, remapping=remapping, uniform_test = True)
+        elif dataset_name == 'incrementaltestSVHN':
+            remapping = get_remapping(remapping, n=10)
+            data_splits = load_incremental_SVHN(data_path, remapping=remapping, uniform_test = False)
+        elif dataset_name == 'incrementalCIFAR100':
+            remapping = get_remapping(remapping, n=20)
+            data_splits = load_incremental_CIFAR100(data_path, remapping=remapping, uniform_test = True)
         elif dataset_name == 'incrementaltestCIFAR100':
-            data_splits = load_incremental_CIFAR100(remapping=remapping, uniform_test = False)
+            remapping = get_remapping(remapping, n=20)
+            data_splits = load_incremental_CIFAR100(data_path, remapping=remapping, uniform_test = False)
         else:
             print(f'Unknown dataset name: {dataset_name}')
             raise NotImplementedError
@@ -177,9 +186,111 @@ def load_FashionMNIST(data_path="~/dataset"):
 
     return trainset, testset, num_channels, num_classes
 
+def load_incremental_SVHN(data_path, remapping, uniform_test):
+    data_path = os.path.expanduser(data_path)
+    splits_paths = [
+        os.path.join(data_path, 'SVHN','extra_A'),
+        os.path.join(data_path, 'SVHN','extra_B'),
+        os.path.join(data_path, 'SVHN','extra_C'),
+        os.path.join(data_path, 'SVHN','train_cropped_images'),
+        os.path.join(data_path, 'SVHN','test_cropped_images')
+    ]
 
-def load_incremental_CIFAR100(remapping= None, uniform_test = False):
-    trainset, testset, num_channels, _ = load_CIFAR100()
+    return load_incremental_local_dataset(splits_paths, remapping, uniform_test)
+
+def load_incremental_local_dataset(splits_paths, remapping, uniform_test = True):
+    data_splits = []
+    print('Loading custom incremental dataset...')
+    for directory in tqdm(splits_paths, leave=False):
+        train_dataset, test_dataset, num_channels, num_classes = load_custom_image_dataset(directory, test_size=0.4)
+        data_splits.append((train_dataset, test_dataset, num_channels, num_classes))
+
+    # combine the train test and the extras into a single monolithic dataset
+    data_splits = combine_subsets(data_splits, [list(range(len(data_splits)))])
+
+    #now seperate the monolithic dataset into 10 subsets [0-9]
+
+    
+    train_subsets = split_dataset_into_subsets(data_splits[0][0], num_classes)
+    test_subsets = split_dataset_into_subsets(data_splits[0][1], num_classes)
+
+    
+
+
+    # Combine the train and test subsets along with num_channels and num_classes into a list of tuples
+    data_splits = [(train_subsets[i], test_subsets[i], num_channels, num_classes) for i in range(len(train_subsets))]
+    # mix the  classes in the dataset together
+    data_splits = mix_subsets(data_splits)
+
+    # combine the subsets with remapping
+    data_splits = combine_subsets(data_splits, remapping)
+
+
+    if uniform_test:
+        data_splits = implement_combined_uniform_test(data_splits)
+    else:
+        data_splits = implement_addetive_dataset(data_splits)
+
+    return data_splits
+
+def load_custom_image_dataset(directory, test_size=0.4):
+    images = []
+    labels = []
+    try:
+        train_dataset, test_dataset, num_channels, num_classes =  load_pickle(directory+'.pkl')
+    except:
+        print(f'\nPresaved dataset not found, Loading custom dataset from {directory}')
+        for label in tqdm(os.listdir(directory), leave=False):
+            label_dir = os.path.join(directory, label)
+            for img_file in tqdm(os.listdir(label_dir), leave=False):
+                img_path = os.path.join(label_dir, img_file)
+                img = cv2.imread(img_path)
+                img = cv2.resize(img, (32, 32))  # Resize image to a fixed size
+                images.append(img)
+                labels.append(int(label))
+    
+        # Transform the dataset
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        ])
+
+        dataset = [(transform(img), label) for img, label in zip(images, labels)]
+    
+        # Calculate the sizes of the train and test sets based on the test_size ratio
+        test_size = int(len(dataset) * test_size)
+        train_size = len(dataset) - test_size
+    
+        # Split the dataset into training and test sets
+        torch.manual_seed(42)
+        train_dataset, test_dataset = random_split(dataset, [train_size, test_size]) # type: ignore
+    
+        num_channels = 3
+        num_classes = len(np.unique(labels))
+
+        try:
+            save_pickle( (train_dataset, test_dataset, num_channels, num_classes), directory+'.pkl')
+        except Exception as e:
+            print('Error saving dataset:', e)
+
+
+   
+    return train_dataset, test_dataset, num_channels, num_classes
+
+def save_pickle(data, filename):
+    with open(filename, 'wb') as f:
+        pickle.dump(data, f)
+
+def load_pickle(filename):
+    with open(filename, 'rb') as f:
+        return pickle.load(f)
+
+
+
+
+
+def load_incremental_CIFAR100(data_path, remapping= None, uniform_test = False):
+    trainset, testset, num_channels, _ = load_CIFAR100(data_path)
     num_classes = 20
     # Split both train and test sets into 20 subsets
     train_subsets = split_dataset_into_subsets(trainset, num_classes)
@@ -205,13 +316,13 @@ def load_incremental_CIFAR100(remapping= None, uniform_test = False):
     return data_splits
 
 def split_dataset_into_subsets(dataset, num_subsets=10):
-    # Assuming CIFAR-100 has 100 classes, grouped into 10 subsets
+    # without assuming the number of classes, grouped into 'num_subsets' subsets
     class_groups = {k: [] for k in range(num_subsets)}  # Dict to hold subsets
 
     # Iterate through the dataset to group indices by class
     for idx, (_, label) in enumerate(dataset):
         # group_key = label // (100 // num_subsets)  # Determine the subset group
-        group_key = label % num_subsets  # Group by modulo 10 of the label
+        group_key = label % num_subsets  # Group by modulo 'num_subsets' of the label
         class_groups[group_key].append(idx)
 
     # Create a subset for each group
