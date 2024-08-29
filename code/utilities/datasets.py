@@ -33,7 +33,7 @@ def get_remapping(choice='ABCD', n=20):
     return remapping
 
 class IncrementalDatasetWraper():
-    def __init__(self, dataset_name = 'incremental_SVHN', data_path="~/datasets", audit_mode = False, addetive_train = False):
+    def __init__(self, dataset_name = 'incremental_SVHN', data_path="~/dataset", audit_mode = False, addetive_train = False):
         self.name = dataset_name
         self.audit_mode = audit_mode
         self.splits = self._load_datasets(dataset_name)
@@ -688,7 +688,7 @@ def merge_dataloaders(trainloaders):
     return DataLoader(ConcatDataset(trn_datasets), trainloaders[0].batch_size)
 
 
-def load_partitioned_datasets(num_clients: int, dataset_name = 'CIFAR10', data_path="~/datasets", val_percent = 10, batch_size=32, split=None):
+def load_partitioned_datasets(num_clients: int, dataset_name = 'CIFAR10', data_path="~/dataset", val_percent = 10, batch_size=32, split=None):
     if split is None:
         dataset = DatasetWrapper(dataset_name, data_path)
         return split_dataloaders(dataset.trainset, dataset.testset, num_clients, split_test=False,val_percent=val_percent, batch_size=batch_size), dataset.num_channels, dataset.num_classes
