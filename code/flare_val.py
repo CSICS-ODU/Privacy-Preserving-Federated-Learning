@@ -24,7 +24,7 @@ from torchvision.transforms import Compose, Normalize, ToTensor
 
 from nvflare.apis.dxo import DXO, DataKind, from_shareable
 from nvflare.apis.executor import Executor
-from nvflare.apis.fl_constant import ReturnCode
+from nvflare.apis.fl_constant import FLContextKey, ReservedKey, ReturnCode
 from nvflare.apis.fl_context import FLContext
 from nvflare.apis.shareable import Shareable, make_reply
 from nvflare.apis.signal import Signal
@@ -32,32 +32,52 @@ from nvflare.app_common.app_constant import AppConstants
 
 
 class Fl_Validator(Executor):
-    def __init__(self, model_name="efficientnet", dataset_name="CIFAR10_0", num_clients=2, data_path="~/datasets", validate_task_name=AppConstants.TASK_VALIDATION):
+    def __init__(self, 
+                model_name="efficientnet", 
+                dataset_name="CIFAR10_0", 
+                num_clients=2, 
+                data_path="~/datasets", 
+                validate_task_name=AppConstants.TASK_VALIDATION):
+
         super().__init__()
 
+        self.dataset_name = dataset_name
+        self.data_path = data_path
+        self.model_name = model_name
         self._validate_task_name = validate_task_name
+        self.is_initialized = False
 
-        dataset_parameters_list = dataset_name.split("_")
+    def initialize(self, fl_ctx: FLContext):
 
-        if len(dataset_parameters_list) == 2:
-            dataset_name, data_index = dataset_parameters_list
-            data_index = int(data_index)
-            split=None
-        else:
-            dataset_name, split, data_index = dataset_parameters_list
-            data_index= int(data_index)
-            split=int(split)
+        self.app_root = fl_ctx.get_prop(FLContextKey.APP_ROOT)
+        fl_args = fl_ctx.get_prop(FLContextKey.ARGS)
+        self.client_id = fl_ctx.get_identity_name()
+
+        dataset_parameters_list = self.dataset_name.split("_")
+
+        # if len(dataset_parameters_list) == 2:
+        #     dataset_name, data_index = dataset_parameters_list
+        #     data_index = int(data_index)
+        #     split=None
+        # else:
+        #     dataset_name, split, data_index = dataset_parameters_list
+        #     data_index= int(data_index)
+        #     split=int(split)
+
+        dataset_name, split, _ = dataset_parameters_list
+        split = int(split)  # Split will be picked up dynamically
+        data_index = int(self.client_id.split("-")[1]) - 1  # Client ID from FLContext
 
         # Preparing the dataset for testing.
-        [trainloader, valloaders, testloader, _ ], num_channels, num_classes = load_partitioned_datasets(num_clients=num_clients, dataset_name=dataset_name, 
-                                                                                                         data_path=data_path, batch_size=32,split=split) 
+        [trainloader, valloaders, testloader, _ ], num_channels, num_classes = load_partitioned_datasets(num_clients=fl_args.n_clients, dataset_name=dataset_name, 
+                                                                                                         data_path=self.data_path, batch_size=32,split=split) 
         
 
         train_loader = trainloader[data_index] # unused
         valloader = valloaders[data_index]    # unused
         
         # Setup the model
-        model = load_model_defination(model_name, num_channels, num_classes) # SimpleNetwork()
+        model = load_model_defination(self.model_name, num_channels, num_classes) # SimpleNetwork()
         device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         model.to(device)
         
@@ -72,6 +92,10 @@ class Fl_Validator(Executor):
                                     summary_writer=None)
 
     def execute(self, task_name: str, shareable: Shareable, fl_ctx: FLContext, abort_signal: Signal) -> Shareable:
+        if not self.is_initialized:
+            self.is_initialized = True
+            self.initialize(fl_ctx)
+        
         if task_name == self._validate_task_name:
             model_owner = "?"
             try:
