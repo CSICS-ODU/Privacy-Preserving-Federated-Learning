@@ -32,7 +32,7 @@ from utilities.datasets import load_partitioned_datasets
 
 from nvflare.apis.dxo import DXO, DataKind, MetaKey, from_shareable
 from nvflare.apis.executor import Executor
-from nvflare.apis.fl_constant import ReservedKey, ReturnCode
+from nvflare.apis.fl_constant import FLContextKey, ReservedKey, ReturnCode
 from nvflare.apis.fl_context import FLContext
 from nvflare.apis.shareable import Shareable, make_reply
 from nvflare.apis.signal import Signal
@@ -46,7 +46,7 @@ class Fl_Trainer(Executor):
         self,
         data_path="~/dataset",
         model_name="efficientnet",
-        dataset_name="CIFAR10_0",
+        dataset_name="CIFAR10",
         lr=0.01,
         epochs=5,
         num_clients=2,
@@ -70,35 +70,61 @@ class Fl_Trainer(Executor):
         super().__init__()
 
         self._lr = lr
+        self.dataset_name = dataset_name
+        self.data_path = data_path
+        self.model_name = model_name
         self._epochs = epochs
         self._train_task_name = train_task_name
         self._pre_train_task_name = pre_train_task_name
         self._submit_model_task_name = submit_model_task_name
         self._exclude_vars = exclude_vars
+        self.is_initialized = False
 
-        dataset_parameters_list = dataset_name.split("_")
 
-        if len(dataset_parameters_list) == 2:
-            dataset_name, data_index = dataset_parameters_list
-            data_index = int(data_index)
-            split=None
-        else:
-            dataset_name, split, data_index = dataset_parameters_list
-            data_index= int(data_index)
-            split=int(split)
+    def initialize(self, fl_ctx: FLContext):
+        self.app_root = fl_ctx.get_prop(FLContextKey.APP_ROOT)
+        fl_args = fl_ctx.get_prop(FLContextKey.ARGS)
+        self.client_id = fl_ctx.get_identity_name()
+
+        print("***********", fl_args.n_clients)
+        print("***********", self.client_id)
+
+        dataset_parameters_list = self.dataset_name.split("_")
+
+        # if len(dataset_parameters_list) == 2:
+        #     dataset_name, data_index = dataset_parameters_list
+        #     data_index = int(data_index)
+        #     split=None
+        # else:
+        #     dataset_name, split, data_index = dataset_parameters_list
+        #     data_index= int(data_index)
+        #     split=int(split)
         
-                
+        # incrementalCIFAR10=ACBD_0_0
+    
+        dataset_name, split, _ = dataset_parameters_list  # Only the base dataset name
+        split = int(split)  # Split will be picked up dynamically
+        data_index = int(self.client_id.split("-")[1]) - 1  # Client ID from FLContext
+        
+        # else:
+        #     dataset_name = dataset_parameters_list[0]
+        #     split = int(fl_args.n_clients)  # Number of clients from FLContext
+        #     data_index = int(self.client_id.split("-")[1]) - 1  # Client ID from FLContext
+        print("\n\n")
+        print("The current split is: ", split)
+        print("\n\n")
         print(f'current working dir: {os.getcwd()}')  
-        [trainloader, valloaders, testloader, _ ], num_channels, num_classes = load_partitioned_datasets(num_clients=num_clients, dataset_name=dataset_name, 
-                                                                                                         data_path=data_path, batch_size=32,split=split) 
+        [trainloader, valloaders, testloader, _ ], num_channels, num_classes = load_partitioned_datasets(num_clients=fl_args.n_clients, dataset_name=dataset_name, 
+                                                                                                         data_path=self.data_path, batch_size=32,split=split) 
 
         
         train_loader = trainloader[data_index]
         valloader = valloaders[data_index]
         self._n_iterations = len(train_loader)
+        
 
         # Training setup
-        model = load_model_defination(model_name, num_channels, num_classes) 
+        model = load_model_defination(self.model_name, num_channels, num_classes) 
         # optimizer = SGD(model.parameters(), lr=0.001, momentum=0.9)
         optimizer = Adam(model.parameters())
         criterion = nn.CrossEntropyLoss()   
@@ -126,8 +152,16 @@ class Fl_Trainer(Executor):
             data=self.model_information.model.state_dict(), default_train_conf=self._default_train_conf
         )
 
+        # OUTPUT fl_args.__dict__.keys()
+        # dict_keys(['job_folder', 'workspace', 'clients', 'n_clients', 'threads', 'gpu', 'max_clients', 'set', 'log_config', 'config_folder', 'job_id', 'client_config', 'env', 'sp_target', 'sp_scheme', 'server_config', 'client_name', 'token'])
+
+
     def execute(self, task_name: str, shareable: Shareable, fl_ctx: FLContext, abort_signal: Signal) -> Shareable:
         try:
+            if not self.is_initialized:
+                self.is_initialized = True
+                self.initialize(fl_ctx)
+
             if task_name == self._pre_train_task_name:
                 # Get the new state dict and send as weights
                 return self._get_model_weights()
