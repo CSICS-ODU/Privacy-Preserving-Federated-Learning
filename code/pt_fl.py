@@ -16,9 +16,9 @@ import os
 import argparse
 import torch
 
-from src.utilities.models import load_model_defination
-from src.utilities.datasets import load_partitioned_datasets
-from src.simple_network import SimpleNetwork
+from code.utilities.models import load_model_defination
+from code.utilities.datasets import load_partitioned_datasets
+from code.simple_network import SimpleNetwork
 
 from torch import nn
 from torch.optim import Adam
