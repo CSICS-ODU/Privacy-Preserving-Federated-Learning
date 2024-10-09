@@ -1,6 +1,0 @@
-python3 -c "import torchvision.datasets as datasets; datasets.CIFAR10(root='${..\Privacy-Preserving-Federated-Learning\dataset\}', train=True, download=True)"
-docker run --rm -it --gpus all --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 -w "/workspace/host_workspace" -v "${PWD}/workspace:/workspace/host_workspace" nvflare:latest
-cp -a . ../workspace
-cd ../workspace/
-./create_job.sh
-./run_simulation.sh
