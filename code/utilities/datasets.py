@@ -16,8 +16,8 @@ import pprint
 import matplotlib.pyplot as plt
 import pickle
 
-from utilities.lib import blockPrinting
-from utilities.cifar100_fine_coarse_labels import remapping
+from code.utilities.lib import blockPrinting
+from code.utilities.cifar100_fine_coarse_labels import remapping
 import pdb,traceback
 from typing import List
 
