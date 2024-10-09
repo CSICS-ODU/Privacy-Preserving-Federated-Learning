@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import argparse
-from src.utilities.models import load_model_defination
-from src.utilities.datasets import load_partitioned_datasets
-from src.simple_network import SimpleNetwork
+from code.utilities.models import load_model_defination
+from code.utilities.datasets import load_partitioned_datasets
+from code.simple_network import SimpleNetwork
 
 from nvflare.app_opt.pt.job_config.fed_avg import FedAvgJob
 from nvflare.job_config.script_runner import ScriptRunner
