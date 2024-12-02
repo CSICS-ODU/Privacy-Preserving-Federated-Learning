@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import copy
 import os
 import argparse
 import torch
@@ -30,6 +30,7 @@ from torchvision.transforms import Compose, Normalize, ToTensor
 
 import nvflare.client as flare
 from nvflare.client.tracking import SummaryWriter
+from nvflare.app_opt.pt.fedproxloss import PTFedProxLoss
 
 DATASET_PATH = "/tmp/nvflare/data"
 
@@ -41,12 +42,14 @@ def main():
     parser.add_argument('-n', '--num_clients', type=int, default=2, help='Number of clients')
     parser.add_argument('-d', '--dataset_name', type=str, default='CIFAR10', help='Dataset name')
     parser.add_argument('-m', '--model_name', type=str, default='efficientnet', help='Model name')
+    parser.add_argument('-a', '--aggregation_function', type=str, default='fedavg', help='Aggregation function')
     args = parser.parse_args()
 
     n_clients = args.num_clients
     num_rounds = args.num_rounds
     dataset_name = args.dataset_name
     model_name = args.model_name
+    aggregation_function = args.aggregation_function
     data_path = "~/dataset"
 
     [trainloader, valloaders, testloader, _ ], num_channels, num_classes = load_partitioned_datasets(num_clients=n_clients, dataset_name=dataset_name, data_path=data_path, batch_size=32,split=None) 
@@ -59,12 +62,25 @@ def main():
     model = load_model_defination(model_name=model_name, num_channels=num_channels, num_classes=num_classes)
 
 
+    model_global = copy.deepcopy(model)
+
     batch_size = 4
-    epochs = 100
+    epochs = 50
     lr = 0.001
     # model = SimpleNetwork()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    model_global.to(device)
+    
     loss = nn.CrossEntropyLoss() # Same as criterion
+    criterion_prox = None
+
+    fedproxloss_mu = 0.0
+    if aggregation_function == 'fedprox':
+        fedproxloss_mu = 0.00001
+
+    if fedproxloss_mu > 0:
+        criterion_prox = PTFedProxLoss(mu=fedproxloss_mu)
+
     optimizer = Adam(model.parameters(), lr=lr)
     transforms = Compose(
         [
@@ -105,6 +121,12 @@ def main():
 
                 predictions = model(images)
                 cost = loss(predictions, labels)
+
+                if fedproxloss_mu > 0:
+                    fed_prox_loss = criterion_prox(model, model_global)
+                    cost += fed_prox_loss
+                    # print("FedProx loss calculated!!")
+
                 cost.backward()
                 optimizer.step()
 
@@ -117,7 +139,7 @@ def main():
 
         print("Finished Training")
 
-        PATH = f"/home/akapo004/new_nvflare/saved_models/{dataset_name}_{n_clients}_net.pth.tar"
+        PATH = f"/home/akapo004/new_nvflare/saved_models/{dataset_name}_{n_clients}_{aggregation_function}_net.pth.tar"
         torch.save(model.state_dict(), PATH)
 
         output_model = flare.FLModel(
@@ -128,7 +150,7 @@ def main():
         flare.send(output_model)
 
         
-        evaluate(evaluation_model=f"{dataset_name}_{n_clients}_net", device=device, dataset_name=dataset_name, model_name=model_name, n_clients = n_clients , data_path= data_path)
+        evaluate(evaluation_model=f"{dataset_name}_{n_clients}_{aggregation_function}_net", device=device, dataset_name=dataset_name, model_name=model_name, n_clients = n_clients , data_path= data_path)
 
 def evaluate(evaluation_model, device, dataset_name, model_name, n_clients, data_path):
     
