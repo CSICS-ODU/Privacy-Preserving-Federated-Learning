@@ -9,6 +9,7 @@ import torch
 import torchvision.transforms as transforms
 from torchvision.datasets import CIFAR10, MNIST, CIFAR100, SVHN, FashionMNIST
 from torch.utils.data import  Dataset, DataLoader, ConcatDataset, Subset, TensorDataset, random_split
+from torch.utils.data import IterableDataset
 import pdb,traceback
 from typing import List
 import pandas as pd
@@ -94,19 +95,40 @@ def load_datasets_by_name(dataset_name, data_path ):
             # import pdb; pdb.set_trace()
             print(f'Unknown dataset name: {dataset_name}')
             raise NotImplementedError
-
-class DatasetWrapper():
-    def __init__(self, dataset_name = 'CIFAR10', data_path="~/dataset"):
         
+
+class DatasetWrapper(IterableDataset):
+    def __init__(self, dataset_name='CIFAR10', data_path="~/dataset", mode='train'):
+        """
+        Initialize the dataset wrapper with support for streaming data.
+        """
         self.data_path = data_path
         self.name = dataset_name
+        self.mode = mode  # 'train' or 'test'
+
+        # Optionally lazy-load datasets
         self.trainset, self.testset, self.num_channels, self.num_classes = self._load_datasets(dataset_name)
 
-
-    # @blockPrinting  
     def _load_datasets(self, dataset_name):
-        return load_datasets_by_name(dataset_name, self.data_path )
-    
+        """
+        Load datasets by name. For streaming, you might load incrementally here.
+        """
+        if self.mode == 'train':
+            # Simulate loading a training dataset (e.g., CIFAR10)
+            return load_datasets_by_name(dataset_name, self.data_path)
+
+    def __iter__(self):
+        """
+        Yield batches iteratively for streaming.
+        """
+        for sample in iter(self.dataset):
+            yield sample
+
+    def __len__(self):
+        """
+        Optional: Return length of dataset if possible (for compatibility).
+        """
+        return len(self.dataset)
    
 
 
