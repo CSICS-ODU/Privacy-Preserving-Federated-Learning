@@ -1,11 +1,11 @@
 matplotlib==3.7.1
-numpy==1.25.0
-opacus==1.4.1
+numpy
+opacus
 opencv_python==4.9.0.80
 pandas==1.5.3
 scikit_learn==1.5.0
 seaborn==0.13.2
-torch==2.2.0
-torchvision==0.15.2
+torch
+torchvision
 tqdm==4.66.3
 nvflare~=2.5.0rc
