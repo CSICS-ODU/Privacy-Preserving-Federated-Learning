@@ -16,6 +16,8 @@ import os
 import argparse
 import torch
 import pdb, traceback
+import requests
+
 
 from src.utilities.models import load_model_defination
 from src.utilities.datasets import load_partitioned_datasets, get_dataloaders_subset
@@ -34,6 +36,35 @@ from nvflare.app_opt.pt.fedproxloss import PTFedProxLoss
 
 DATASET_PATH = "/tmp/nvflare/data"
 
+def fetch_batch_from_api():
+    """Fetch a batch from the streaming API."""
+    try:
+        response = requests.get("http://127.0.0.1:5004/get_data")
+        response.raise_for_status()  # Raise HTTPError for bad responses
+        data = response.json()  # Ensure response is JSON
+        inputs = torch.tensor(data["inputs"])
+        labels = torch.tensor(data["labels"])
+        return inputs, labels
+    except requests.exceptions.RequestException as e:
+        print(f"API request failed: {e}")
+        raise
+    except ValueError:
+        print(f"Invalid JSON received: {response.text}")
+        raise RuntimeError("Error fetching batch: Invalid JSON received")
+
+def initialize_dataloader_api(dataset_name, data_path, batch_size):
+    """Initialize the dataloader via API."""
+    url = "http://127.0.0.1:5004/initialize"
+    payload = {
+        "dataset_name": dataset_name,
+        "data_path": data_path,
+        "batch_size": batch_size
+    }
+    response = requests.post(url, json=payload)
+    if response.status_code == 200:
+        print(response.json()["message"])
+    else:
+        raise RuntimeError(f"Error initializing dataloader: {response.json()}")
 
 def main():
     
@@ -67,6 +98,9 @@ def main():
     batch_size = 4
     epochs = 50
     lr = 0.001
+
+    # initialize_dataloader_api(dataset_name, data_path, batch_size)
+
     # model = SimpleNetwork()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model_global.to(device)
@@ -115,11 +149,12 @@ def main():
             # print("NVIDIA TL", train_loader)
             print("MY TL", trainloader[0])
             print("**********************************")
-            for i, batch in enumerate(trainloader[0]):
-                images, labels = batch[0].to(device), batch[1].to(device)
+            for i in range(len(trainloader[0])):
+                inputs, labels = fetch_batch_from_api()
+                inputs, labels = inputs.to(device), labels.to(device)
                 optimizer.zero_grad()
 
-                predictions = model(images)
+                predictions = model(inputs)
                 cost = loss(predictions, labels)
 
                 if fedproxloss_mu > 0:
@@ -130,7 +165,7 @@ def main():
                 cost.backward()
                 optimizer.step()
 
-                running_loss += cost.cpu().detach().numpy() / images.size()[0]
+                running_loss += cost.cpu().detach().numpy() / inputs.size()[0]
                 if i % 3000 == 0:
                     print(f"Epoch: {epoch}/{epochs}, Iteration: {i}, Loss: {running_loss / 3000}")
                     global_step = input_model.current_round * steps + epoch * len(trainloader[0]) + i
@@ -223,4 +258,5 @@ def evaluate(evaluation_model, device, dataset_name, model_name, n_clients, data
 
 
 if __name__ == "__main__":
+    initialize_dataloader_api("CIFAR10", "~/dataset", 32)
     main()
