@@ -48,16 +48,22 @@ class IncrementalDatasetWraper():
         
         if dataset_name == 'incrementalSVHN':
             remapping = get_remapping(remapping, n=10)
-            data_splits = load_incremental_SVHN(data_path, remapping=remapping, uniform_test = True)
+            data_splits = load_incremental_local_SVHN(data_path, remapping=remapping, uniform_test = True)
         elif dataset_name == 'incrementaltestSVHN':
             remapping = get_remapping(remapping, n=10)
-            data_splits = load_incremental_SVHN(data_path, remapping=remapping, uniform_test = False)
+            data_splits = load_incremental_local_SVHN(data_path, remapping=remapping, uniform_test = False)
         elif dataset_name == 'incrementalCIFAR100':
             remapping = get_remapping(remapping, n=20)
-            data_splits = load_incremental_CIFAR100(data_path, remapping=remapping, uniform_test = True)
+            data_splits = load_incremental_CIFAR20(data_path, remapping=remapping, uniform_test = True)
         elif dataset_name == 'incrementaltestCIFAR100':
             remapping = get_remapping(remapping, n=20)
-            data_splits = load_incremental_CIFAR100(data_path, remapping=remapping, uniform_test = False)
+            data_splits = load_incremental_CIFAR20(data_path, remapping=remapping, uniform_test = False)
+        elif dataset_name == 'incrementalCIFAR10' or dataset_name == 'incrementalMNIST' or dataset_name == 'incrementalFashionMNIST':
+            remapping = get_remapping(remapping, n=10)
+            data_splits = load_incremental(dataset_name, data_path, remapping=remapping, uniform_test = True)
+        elif dataset_name == 'incrementaltestCIFAR10' or dataset_name == 'incrementaltestMNIST' or dataset_name == 'incrementaltestFashionMNIST':
+            remapping = get_remapping(remapping, n=10)
+            data_splits = load_incremental(dataset_name, data_path, remapping=remapping, uniform_test = False)
         else:
             print(f'Unknown dataset name: {dataset_name}')
             raise NotImplementedError
@@ -73,7 +79,21 @@ class IncrementalDatasetWraper():
         self.trainset, self.testset, self.num_channels, self.num_classes = self.splits[split]
         self.data_split = [self.trainset, self.testset, self.num_channels, self.num_classes]
 
-
+def load_datasets_by_name(dataset_name, data_path ):
+        if dataset_name == 'CIFAR10':
+            return load_CIFAR10(data_path)
+        elif dataset_name == 'CIFAR100':
+            return load_CIFAR100(data_path)
+        elif dataset_name == 'MNIST':
+            return load_MNIST(data_path)
+        elif dataset_name == 'FashionMNIST':
+            return load_FashionMNIST(data_path)
+        elif dataset_name == "SVHN":
+            return load_SVHN(data_path)
+        else:
+            # import pdb; pdb.set_trace()
+            print(f'Unknown dataset name: {dataset_name}')
+            raise NotImplementedError
 
 class DatasetWrapper():
     def __init__(self, dataset_name = 'CIFAR10', data_path="~/dataset"):
@@ -85,20 +105,7 @@ class DatasetWrapper():
 
     # @blockPrinting  
     def _load_datasets(self, dataset_name):
-        if dataset_name == 'CIFAR10':
-            return load_CIFAR10(self.data_path)
-        elif dataset_name == 'CIFAR100':
-            return load_CIFAR100(self.data_path)
-        elif dataset_name == 'MNIST':
-            return load_MNIST(self.data_path)
-        elif dataset_name == 'FashionMNIST':
-            return load_FashionMNIST(self.data_path)
-        elif dataset_name == "SVHN":
-            return load_SVHN(self.data_path)
-        else:
-            # import pdb; pdb.set_trace()
-            print(f'Unknown dataset name: {dataset_name}')
-            raise NotImplementedError
+        return load_datasets_by_name(dataset_name, self.data_path )
     
    
 
@@ -186,7 +193,7 @@ def load_FashionMNIST(data_path="~/dataset"):
 
     return trainset, testset, num_channels, num_classes
 
-def load_incremental_SVHN(data_path, remapping, uniform_test):
+def load_incremental_local_SVHN(data_path, remapping, uniform_test):
     data_path = os.path.expanduser(data_path)
     splits_paths = [
         os.path.join(data_path, 'SVHN','extra_A'),
@@ -287,9 +294,39 @@ def load_pickle(filename):
 
 
 
+def load_incremental(dataset_name, data_path, remapping= None, uniform_test = False):
+    if 'test' in dataset_name:
+        datasetname = dataset_name.replace('incrementaltest','')
+    else:
+        datasetname = dataset_name.replace('incremental','')
+        
+    trainset, testset, num_channels, num_classes = load_datasets_by_name(datasetname, data_path )
+
+    
+    #now seperate the monolithic dataset into 10 subsets [0-9]
+    train_subsets = split_dataset_into_subsets(trainset, num_classes)
+    test_subsets = split_dataset_into_subsets(testset, num_classes)
+    
+
+    # Combine the train and test subsets along with num_channels and num_classes into a list of tuples
+    data_splits = [(train_subsets[i], test_subsets[i], num_channels, num_classes) for i in range(len(train_subsets))]
+    # mix the  classes in the dataset together
+    data_splits = mix_subsets(data_splits)
+
+    # combine the subsets with remapping
+    data_splits = combine_subsets(data_splits, remapping)
 
 
-def load_incremental_CIFAR100(data_path, remapping= None, uniform_test = False):
+    if uniform_test:
+        data_splits = implement_combined_uniform_test(data_splits)
+    else:
+        data_splits = implement_addetive_dataset(data_splits)
+
+    return data_splits
+    
+    
+
+def load_incremental_CIFAR20(data_path, remapping= None, uniform_test = False):
     trainset, testset, num_channels, _ = load_CIFAR100(data_path)
     num_classes = 20
     # Split both train and test sets into 20 subsets
