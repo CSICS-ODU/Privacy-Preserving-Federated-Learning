@@ -1,36 +1,43 @@
 # Privacy Preserving Federated Learning
-- [ ]  Train and save a ML model first
- - Run '**[create_and_run_simulation.sh](https://github.com/soumyaxyz/Privacy-Preserving-Federated-Learning/blob/main/create_and_run_simulation.sh "create_and_run_simulation.sh")**' with appropriate arguments to train and save a ML model  on a dataset with **[Nvidia FLARE](https://nvflare.readthedocs.io/en/main/index.html)** 
 
-	    bash create_and_run_simulation.sh 	-m <model_name> 
-							-d <dataset_name> 
-							-n <num_clients> 
-							-r <num_FL_rounds>   
-							-w <saved_model_weights>
-    example:
-    
-	    bash create_and_run_simulation.sh -m efficientnet -d CIFAR10  -n 2 -r 25
-     
-    OR
+Example of using [NVIDIA FLARE](https://nvflare.readthedocs.io/en/main/index.html) to train an image classifier
+using federated averaging ([FedAvg](https://arxiv.org/abs/1602.05629))
+and [PyTorch](https://pytorch.org/) as the deep learning training framework.
 
- - Run all commands in '**[interactive_create.sh](https://github.com/soumyaxyz/Privacy-Preserving-Federated-Learning/blob/main/interactive_create.sh "interactive_create.sh")**' in sequence to create a job  with **2** clients to train **efficientnet** on **CIFAR10** for **25** rounds and and run the simulation.
+> **_NOTE:_** This example uses the [CIFAR-10](https://www.cs.toronto.edu/~kriz/cifar.html) dataset and will load its data within the client train code.
 
+You can follow the [Getting Started with NVFlare (PyTorch) notebook](../../getting_started/pt/nvflare_pt_getting_started.ipynb)
+for a detailed walkthrough of the basic concepts.
 
+See the [Hello PyTorch](https://nvflare.readthedocs.io/en/main/examples/hello_pt_job_api.html#hello-pt-job-api) example documentation page for details on this
+example.
 
- 
-- [ ]  Run '**[membership_inference_attack.py](https://github.com/soumyaxyz/Privacy-Preserving-Federated-Learning/blob/main/code/membership_inference_attack.py "membership_inference_attack.py")**' with appropriate arguments to execute membership inference attack on a saved ML model.
+To run this example with the FLARE API, you can follow the [hello_world notebook](../hello_world.ipynb), or you can quickly get
+started with the following:
 
 
+### 1. Install NVIDIA FLARE
 
-Note that run **[modify.py](https://github.com/soumyaxyz/Privacy-Preserving-Federated-Learning/blob/main/modify.py "modify.py")** can be utilized to convert the scripts for a [SLURM](https://slurm.schedmd.com/sbatch.html) managed system.
+Follow the [Installation](../../getting_started/README.md) instructions to install NVFlare.
 
-### Change log
--  Added unified interface for running MIA
+Install additional requirements (if you already have a specific version of nvflare installed in your environment, you may want to remove nvflare in the requirements to avoid reinstalling nvflare):
 
- - Added unified interface for running simulated Federated job
+```
+pip3 install -r requirements.txt
+```
 
-		#To run a standalone job  
-		sbatch run_fedreated_simulation.sh -r 2 -n 2 -d CIFAR100 -m efficeintnet
+### 2. Run the experiment
 
-		#To run an incremental job (-s number of splits)  
-		sbatch run_fedreated_simulation.sh -r 7 -n 2 -t 2 -s 4 -d incrementalCIFAR100=ABCD -m efficientnet
+Run the script using the job API to create the job and run it with the simulator:
+
+```
+python3 fedavg_script_runner_pt.py
+```
+
+### 3. Access the logs and results
+
+You can find the running logs and results inside the simulator's workspace:
+
+```bash
+$ ls /tmp/nvflare/jobs/workdir/
+```

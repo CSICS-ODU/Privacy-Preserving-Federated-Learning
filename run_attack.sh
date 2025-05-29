@@ -3,16 +3,8 @@
 #SBATCH -c 8
 #SBATCH -p gpu 
 #SBATCH --gres gpu:1
-#SBATCH -o attack-%j.out
+#SBATCH -o attack_OverlapFL_exp1_CIFAR10_10_fedavg_net-%j.out
 
-module load container_env  pytorch-gpu/2.0.1
+module load container_env  pytorch-gpu
 
-crun -p ~/envs/ppfl python code/membership_inference_attack.py  -m efficientnet -em CentralizedefficientnetincrementalCIFAR1000 -d incrementalCIFAR100-0  
-crun -p ~/envs/ppfl python code/membership_inference_attack.py  -m efficientnet -em CentralizedefficientnetincrementalCIFAR1001 -d incrementalCIFAR100-1 
-crun -p ~/envs/ppfl python code/membership_inference_attack.py  -m efficientnet -em CentralizedefficientnetincrementalCIFAR1002 -d incrementalCIFAR100-2 
-crun -p ~/envs/ppfl python code/membership_inference_attack.py  -m efficientnet -em CentralizedefficientnetincrementalCIFAR1003 -d incrementalCIFAR100-3 
-crun -p ~/envs/ppfl python code/membership_inference_attack.py  -m efficientnet -em CentralizedefficientnetincrementalCIFAR1004 -d incrementalCIFAR100-4
-
-
-
-
+crun -p /scratch/sbane002/shared/envs/new_nvflare python3 mi_attack.py -d CIFAR10 -em OverlapFL_exp1_CIFAR10_10_fedavg_net
